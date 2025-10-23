@@ -1,0 +1,33 @@
+# Core Framework
+fastapi>=0.118.2
+uvicorn>=0.37.0
+python-multipart>=0.0.20
+pydantic>=2.12.0
+pydantic-settings>=2.11.0
+python-dotenv>=1.1.1
+
+# AI Agent
+langchain>=0.3.27
+langchain-core>=1.0.0
+langchain-google-genai>=2.1.12
+langchain-community>=0.3.31
+google-genai>=1.45.0
+
+# GCP
+google-cloud-vision>=3.11.0
+protobuf>=6.33.0
+
+# HTTP & Async
+httpx>=0.28.1
+
+# Image Processing
+pillow>=11.3.0
+
+# Database and Caching
+sqlalchemy>=2.0.44
+
+# Utilities
+tenacity>=9.0.0
+
+# Translation
+deepl>=1.23.0

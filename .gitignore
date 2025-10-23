@@ -1,0 +1,9 @@
+.env
+.env.production
+credentials.json
+*.db
+*.db-shm
+*.db-wal
+venv/
+.venv/
+.idea/
