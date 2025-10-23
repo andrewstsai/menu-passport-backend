@@ -37,19 +37,17 @@ class Settings(BaseSettings):
         case_sensitive=False
     )
 
-    def get_google_credentials_dict(self) -> dict:
+    @property
+    def credentials_path(self):
         """
-        Get Google credentials as dictionary
+        Get absolute path to Google Cloud credentials file
         """
-        if self.google_application_credentials_json:
-            return json.loads(self.google_application_credentials_json)
+        cred_path = Path(self.google_application_credentials)
 
-        if self.google_application_credentials:
-            path = Path(self.google_application_credentials)
-            if path.exists():
-                return json.loads(path.read_text())
+        if cred_path.is_absolute():
+            return cred_path
 
-        raise ValueError("No Google credentials found")
+        return PROJECT_ROOT / cred_path
 
     @property
     def database_path(self):
