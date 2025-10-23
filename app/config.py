@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     google_cloud_project: str
     google_application_credentials: Optional[str] = None
     google_application_credentials_json: Optional[str] = None
-    gemini_api_key: str
+    openai_api_key: str
     google_custom_search_api_key: str
     google_custom_search_engine_id: str
     database_url: str

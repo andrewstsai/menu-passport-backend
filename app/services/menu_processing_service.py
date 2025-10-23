@@ -9,7 +9,7 @@ import json
 from datetime import datetime
 from sqlalchemy.orm import Session
 import asyncio
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.prompts import SYSTEM_PROMPT, FILTER_MENU_ITEMS_PROMPT
 from app.models.menu import MenuImage, MenuItem
@@ -43,12 +43,11 @@ class MenuProcessingService:
         self.translation_service = translation_service
         self.image_search_service = image_search_service
         self.currency_service_class = currency_service_class
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-flash-lite-latest",
-            google_api_key=settings.gemini_api_key,
-            temperature=0.1,
-            max_output_tokens=8192,
-            convert_system_message_to_human=True
+        self.llm = ChatOpenAI(
+            model="gpt-5-nano",
+            api_key=settings.openai_api_key,
+            temperature=0.2,
+            max_tokens=8192
         )
         logger.info("Orchestration Agent initialized")
 
