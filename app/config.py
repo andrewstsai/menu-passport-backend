@@ -1,6 +1,8 @@
+import json
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 
 
@@ -21,7 +23,8 @@ class Settings(BaseSettings):
     deepl_api_key: str
     exchange_rate_api_key: str
     google_cloud_project: str
-    google_application_credentials: str
+    google_application_credentials: Optional[str] = None
+    google_application_credentials_json: Optional[str] = None
     gemini_api_key: str
     google_custom_search_api_key: str
     google_custom_search_engine_id: str
@@ -34,17 +37,19 @@ class Settings(BaseSettings):
         case_sensitive=False
     )
 
-    @property
-    def credentials_path(self):
+    def get_google_credentials_dict(self) -> dict:
         """
-        Get absolute path to Google Cloud credentials file
+        Get Google credentials as dictionary
         """
-        cred_path = Path(self.google_application_credentials)
+        if self.google_application_credentials_json:
+            return json.loads(self.google_application_credentials_json)
 
-        if cred_path.is_absolute():
-            return cred_path
+        if self.google_application_credentials:
+            path = Path(self.google_application_credentials)
+            if path.exists():
+                return json.loads(path.read_text())
 
-        return PROJECT_ROOT / cred_path
+        raise ValueError("No Google credentials found")
 
     @property
     def database_path(self):

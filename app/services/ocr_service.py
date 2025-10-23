@@ -3,6 +3,7 @@ Google Cloud Vision OCR Service
 """
 
 from google.cloud import vision_v1 as vision
+from google.oauth2 import service_account
 import logging
 from typing import Dict
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -22,8 +23,12 @@ class OCRService:
         """
         Initialize Vision API client
         """
-        self.client = vision.ImageAnnotatorClient.from_service_account_json(settings.credentials_path)
-        logger.info(f"OCR service initialized (Google Cloud Vision)")
+        creds_dict = settings.get_google_credentials_dict()
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict
+        )
+        self.client = vision.ImageAnnotatorClient(credentials=credentials)
+        logger.info(f"OCR service initialized")
 
     @retry(
         stop=stop_after_attempt(3),
