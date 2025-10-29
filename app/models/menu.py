@@ -40,7 +40,7 @@ class MenuImage(Base):
     def __repr__(self):
         return f"<MenuImage(id={self.id}, filename='{self.filename}', status='{self.status}')>"
 
-    def to_dict(self, include_ocr=False):
+    def to_dict(self):
         """Converts to dictionary"""
         data = {
             "id": self.id,
@@ -48,6 +48,7 @@ class MenuImage(Base):
             "file_size": self.file_size,
             "image_hash": self.image_hash,
             "ocr_completed": self.ocr_completed,
+            "ocr_blocks": self.ocr_blocks,
             "total_blocks": self.total_blocks,
             "language": self.language,
             "language_confidence": self.language_confidence,
@@ -55,9 +56,6 @@ class MenuImage(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
-
-        if include_ocr and self.ocr_blocks:
-            data["ocr_blocks"] = self.ocr_blocks
 
         if self.status == "failed" and self.error_message:
             data["error_message"] = self.error_message

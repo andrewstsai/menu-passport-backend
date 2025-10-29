@@ -12,12 +12,15 @@ from contextlib import asynccontextmanager
 import hashlib
 
 from app.database import init_db, get_db
-from app.services.ocr_service import OCRService
-from app.services.menu_processing_service import MenuProcessingService
-from app.services.currency_conversion_service import CurrencyConversionService
+from app.services.cache_service import CacheService
 from app.services.image_search_service import ImageSearchService
 from app.services.translation_service import TranslationService
+from app.services.ocr_service import OCRService
+from app.services.filtration_service import FiltrationService
+from app.services.currency_conversion_service import CurrencyConversionService
+from app.services.menu_processing_service import MenuProcessingService
 from app.config import settings
+from app.agents.menu_agent import MenuAgent
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,12 +44,10 @@ app.add_middleware(
 ocr_service = OCRService()
 image_search_service = ImageSearchService(settings.google_custom_search_api_key, settings.google_custom_search_engine_id)
 translation_service = TranslationService(settings.deepl_api_key)
-menu_processing_service = MenuProcessingService(
-    ocr_service=ocr_service,
-    currency_service_class=CurrencyConversionService,
-    image_search_service=image_search_service,
-    translation_service=translation_service
-)
+currency_service = CurrencyConversionService()
+filtration_service = FiltrationService()
+cache_service = CacheService()
+init_db()
 
 @asynccontextmanager
 async def lifespan():
@@ -85,7 +86,7 @@ async def extract_menu(
     file: UploadFile = File(...),
     target_language: str = Query(..., description="Language to convert to (ISO 639: e.g., en, es, fr)"),
     target_currency: Optional[str] = Query(None, description="OPTIONAL: Currency to convert to (ISO 4217: e.g., USD, EUR)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Complete menu extraction route
@@ -134,6 +135,15 @@ async def extract_menu(
         logger.info(f"Image hash: {image_hash[:8]}...")
         logger.info(f"File size: {file_size / 1024:.1f} KB")
 
+        menu_processing_service = MenuProcessingService(
+            ocr_service=ocr_service,
+            currency_service=currency_service,
+            image_search_service=image_search_service,
+            translation_service=translation_service,
+            filtration_service=filtration_service,
+            cache_service=cache_service,
+        )
+
         result = await menu_processing_service.process_menu(
             image_bytes=image_bytes,
             image_hash=image_hash,
@@ -149,3 +159,44 @@ async def extract_menu(
     except Exception as e:
         logger.error(f"Processing failed: {e}")
         raise HTTPException(500, str(e))
+
+@app.post("/extract-agent")
+async def extract_menu(
+    file: UploadFile = File(...),
+    target_language: str = Query(..., description="Language to convert to (ISO 639: e.g., en, es, fr)"),
+    target_currency: Optional[str] = Query(None, description="OPTIONAL: Currency to convert to (ISO 4217: e.g., USD, EUR)"),
+    db: Session = Depends(get_db)
+):
+    allowed_types = ["image/jpeg", "image/png", "image/jpg"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(400, "Invalid file type. Allowed: JPEG, PNG")
+
+    logger.info(f"Processing menu: {file.filename}")
+    logger.info(f"Translation: {target_language} (required)")
+    logger.info(f"Target Currency: {target_currency or 'none'}")
+
+    image_bytes = await file.read()
+    file_size = len(image_bytes)
+
+    max_size = settings.max_image_size_mb * 1024 * 1024
+    if file_size > max_size:
+        raise HTTPException(400, f"File too large. Max: {settings.max_image_size_mb}MB")
+
+    image_hash = hashlib.sha256(image_bytes).hexdigest()
+    logger.info(f"Image hash: {image_hash[:8]}...")
+    logger.info(f"File size: {file_size / 1024:.1f} KB")
+
+    extract_menu_agent = MenuAgent()
+    extract_menu_agent.set_tool_context(
+        image_bytes,
+        image_hash,
+        db,
+        ocr_service,
+        filtration_service,
+        image_search_service,
+        translation_service,
+        currency_service,
+        cache_service
+    )
+    result = await extract_menu_agent.process_menu(target_language, target_currency)
+    return result

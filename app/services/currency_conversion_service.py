@@ -52,32 +52,33 @@ class CurrencyConversionService:
 
     API_BASE_URL = "https://api.exchangerate-api.com/v4/latest"
 
-    def __init__(
-        self,
-        from_currency: str,
-        to_currency: Optional[str] = None
-    ):
+    def __init__(self):
+        """Initializes currency conversion service"""
+        self.from_currency = None
+        self.to_currency = None
+        self.conversion_rate: Optional[float] = None
+
+    def set_currency_conversion_rate(self, from_currency: str, to_currency: str):
         """
-        Initializes currency conversion service
+        Sets currency conversion rate
 
         Args:
             from_currency: Source currency (ISO 639 language code or ISO 4217 currency code)
             to_currency: Target currency (ISO 4217 currency code)
         """
-        self.from_currency = self._language_to_currency(from_currency)
+        self.from_currency = self.language_to_currency(from_currency)
         self.to_currency = to_currency
-        self.conversion_rate: Optional[float] = None
 
         logger.info(f"Currency service initialized")
         logger.info(f"From: {self.from_currency}")
         logger.info(f"To: {self.to_currency or 'None'}")
 
         if self.to_currency and self.from_currency != self.to_currency:
-            self._fetch_conversion_rate()
+            self.fetch_conversion_rate()
         elif self.from_currency == self.to_currency:
             self.conversion_rate = 1.0
 
-    def _language_to_currency(self, code: str) -> str:
+    def language_to_currency(self, code: str) -> str:
         """
         Converts ISO 639 language code to ISO 4217 currency code
 
@@ -99,7 +100,7 @@ class CurrencyConversionService:
         logger.warning(f"Unknown language code '{code}', defaulting to USD")
         return 'USD'
 
-    def _fetch_conversion_rate(self):
+    def fetch_conversion_rate(self):
         """
         Fetches live conversion rate from ExchangeRate-API
 
