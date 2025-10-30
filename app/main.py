@@ -28,9 +28,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown"""
+    logger.info("Starting Menu Passport Backend")
+    logger.info(f"Environment: {settings.environment}")
+
+    init_db()
+    logger.info("Database initialized")
+
+    yield
+
+    logger.info("Shutting down Menu Passport Backend")
+    logger.info("Shutdown complete")
+
 app = FastAPI(
     title="Menu Passport API",
-    description="Complete menu extraction with OCR, AI parsing, translation, currency conversion, and image search"
+    description="Agentic AI-powered menu translation API that processes items from foreign restaurant menu images with OCR, enriching with translations, currency conversion, and images",
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -47,49 +62,34 @@ translation_service = TranslationService(settings.deepl_api_key)
 currency_service = CurrencyConversionService()
 filtration_service = FiltrationService()
 cache_service = CacheService()
-init_db()
 
-@asynccontextmanager
-async def lifespan():
-    """Lifespan context manager for startup and shutdown"""
-    logger.info("Starting Menu Passport Backend")
-    logger.info(f"Environment: {settings.environment}")
-
-    init_db()
-    logger.info("Database initialized")
-
-    yield
-
-    logger.info("Shutting down Menu Passport Backend")
-    logger.info("Shutdown complete")
-
-@app.get("/")
+@app.get("/", tags=["Info"])
 async def root():
     """API information"""
     return {
-        "status": "healthy",
         "service": "Menu Passport API",
         "services": {
             "ocr": "Google Cloud Vision",
-            "agent": "Vertex AI Gemini Flash Lite",
+            "agent": "GPT 5 Mini",
             "translation": "DeepL",
             "currency": "ExchangeRate-API",
             "image_search": "Google Custom Search"
         },
         "endpoints": {
-            "main": "POST /extract"
+            "traditional processing": "POST /process",
+            "agent processing": "POST /process-agent"
         }
     }
 
-@app.post("/extract")
-async def extract_menu(
+@app.post("/process", tags=["Menu Processing (Traditional)"])
+async def process_menu(
     file: UploadFile = File(...),
     target_language: str = Query(..., description="Language to convert to (ISO 639: e.g., en, es, fr)"),
     target_currency: Optional[str] = Query(None, description="OPTIONAL: Currency to convert to (ISO 4217: e.g., USD, EUR)"),
     db: Session = Depends(get_db),
 ):
     """
-    Complete menu extraction route
+    Traditional menu processing route
 
     **Process:**
     1. Check database for cached OCR results
@@ -160,43 +160,67 @@ async def extract_menu(
         logger.error(f"Processing failed: {e}")
         raise HTTPException(500, str(e))
 
-@app.post("/extract-agent")
-async def extract_menu(
+@app.post("/process-agent", tags=["Menu Processing (Agent)"])
+async def process_menu_agent(
     file: UploadFile = File(...),
     target_language: str = Query(..., description="Language to convert to (ISO 639: e.g., en, es, fr)"),
     target_currency: Optional[str] = Query(None, description="OPTIONAL: Currency to convert to (ISO 4217: e.g., USD, EUR)"),
     db: Session = Depends(get_db)
 ):
-    allowed_types = ["image/jpeg", "image/png", "image/jpg"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(400, "Invalid file type. Allowed: JPEG, PNG")
+    """
+        Menu processing route utilizing agentic AI
 
-    logger.info(f"Processing menu: {file.filename}")
-    logger.info(f"Translation: {target_language} (required)")
-    logger.info(f"Target Currency: {target_currency or 'none'}")
+        **Parameters:**
+        - file: Menu image (JPEG/PNG)
+        - target_language: Target language for translation
+        - target_currency: Target currency for conversion
 
-    image_bytes = await file.read()
-    file_size = len(image_bytes)
+        **Returns:**
+        - menu_items: List of structured menu items with:
+          - name: Original menu item name
+          - translated_name: Translated name
+          - bounding_box: Location on image
+          - image_url: Google image search result
+          - original_price: Original price (if target_currency specified)
+          - converted_price: Converted price (if target_currency specified)
+        """
+    try:
+        allowed_types = ["image/jpeg", "image/png", "image/jpg"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(400, "Invalid file type. Allowed: JPEG, PNG")
 
-    max_size = settings.max_image_size_mb * 1024 * 1024
-    if file_size > max_size:
-        raise HTTPException(400, f"File too large. Max: {settings.max_image_size_mb}MB")
+        logger.info(f"Processing menu: {file.filename}")
+        logger.info(f"Translation: {target_language} (required)")
+        logger.info(f"Target Currency: {target_currency or 'none'}")
 
-    image_hash = hashlib.sha256(image_bytes).hexdigest()
-    logger.info(f"Image hash: {image_hash[:8]}...")
-    logger.info(f"File size: {file_size / 1024:.1f} KB")
+        image_bytes = await file.read()
+        file_size = len(image_bytes)
 
-    extract_menu_agent = MenuAgent()
-    extract_menu_agent.set_tool_context(
-        image_bytes,
-        image_hash,
-        db,
-        ocr_service,
-        filtration_service,
-        image_search_service,
-        translation_service,
-        currency_service,
-        cache_service
-    )
-    result = await extract_menu_agent.process_menu(target_language, target_currency)
-    return result
+        max_size = settings.max_image_size_mb * 1024 * 1024
+        if file_size > max_size:
+            raise HTTPException(400, f"File too large. Max: {settings.max_image_size_mb}MB")
+
+        image_hash = hashlib.sha256(image_bytes).hexdigest()
+        logger.info(f"Image hash: {image_hash[:8]}...")
+        logger.info(f"File size: {file_size / 1024:.1f} KB")
+
+        menu_agent = MenuAgent()
+        menu_agent.set_tool_context(
+            image_bytes,
+            image_hash,
+            db,
+            ocr_service,
+            filtration_service,
+            image_search_service,
+            translation_service,
+            currency_service,
+            cache_service
+        )
+        result = await menu_agent.process_menu(target_language, target_currency)
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Processing failed: {e}")
+        raise HTTPException(500, str(e))

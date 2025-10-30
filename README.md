@@ -1,7 +1,8 @@
 # Menu Passport Backend
 
-A FastAPI-based backend service that translates restaurant menus using AI agents. 
-Upload a menu image, and get back translated dishes with descriptions, converted prices, and visual search results.
+A FastAPI-based backend service that translates restaurant menus with the option of using a traditional pipeline or 
+using agentic AI. Upload a menu image, and get back translated dishes with descriptions, converted prices, and visual 
+search results.
 
 
 ## Installation
@@ -10,7 +11,7 @@ Upload a menu image, and get back translated dishes with descriptions, converted
 
 ```bash
 git clone <your-repo-url>
-cd menu-translator-backend
+cd menu-passport-backend
 ```
 
 ### Create virtual environment and install dependencies
