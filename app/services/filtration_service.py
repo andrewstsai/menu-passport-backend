@@ -11,6 +11,26 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def _merge_bounding_boxes(boxes: List[Dict]) -> Dict | None:
+    """Merge multiple bounding boxes into one encompassing box."""
+    if not boxes:
+        return None
+    if len(boxes) == 1:
+        return boxes[0]
+
+    min_left = min(box['left'] for box in boxes)
+    min_top = min(box['top'] for box in boxes)
+    max_right = max(box['left'] + box['width'] for box in boxes)
+    max_bottom = max(box['top'] + box['height'] for box in boxes)
+
+    return {
+        'left': round(min_left, 4),
+        'top': round(min_top, 4),
+        'width': round(max_right - min_left, 4),
+        'height': round(max_bottom - min_top, 4)
+    }
+
+
 class FiltrationService:
     """OpenAI API service for filtering OCR blocks"""
     def __init__(self):
@@ -57,7 +77,7 @@ class FiltrationService:
             )
 
             response = self.client.responses.create(
-                model="gpt-5-mini",
+                model="gpt-5.1",
                 instructions=FILTERING_SYSTEM_PROMPT,
                 input=prompt,
             )
@@ -74,8 +94,27 @@ class FiltrationService:
 
             parsed = json.loads(result_text)
             items = parsed.get('items', [])
+
+            for item in items:
+                if 'source_positions' in item and len(item['source_positions']) > 0:
+                    source_boxes = []
+                    for pos in item['source_positions']:
+                        if 0 < pos <= len(sorted_blocks):
+                            block = sorted_blocks[pos - 1]
+                            if 'bounding_box' in block:
+                                source_boxes.append(block['bounding_box'])
+
+                    if source_boxes:
+                        item['bounding_box'] = _merge_bounding_boxes(source_boxes)
+                    else:
+                        item['bounding_box'] = None
+                else:
+                    item['bounding_box'] = None
+
+                item.pop('source_positions', None)
             return items
 
         except Exception as e:
             logger.error(f"Filtration failed: {str(e)}", exc_info=True)
             return []
+

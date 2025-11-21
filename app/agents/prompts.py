@@ -223,10 +223,18 @@ FILTERING_SYSTEM_PROMPT = """You are an expert menu filtering assistant. Your ro
 - Skip description blocks that come after item names (usually smaller text or full sentences)
 - Multiple spaces/dashes between item and price: ignore separator blocks
 
+**TRACK SOURCE BLOCKS FOR BOUNDING BOX MERGING:**
+- When combining multiple adjacent text blocks into a single menu item, record ALL source position numbers
+- This allows accurate bounding box calculation that encompasses the entire item name
+- Example: If positions 7 and 8 combine to form "ビーフカレー", record both positions
+- For single-block items, record just that one position
+
 **PRESERVE BOUNDING BOXES:**
-- Use the bounding box of the main item name block (leftmost text)
-- Don't include price block's bounding box
-- Don't include description block's bounding box
+- Include the 'source_positions' field listing ALL position numbers that form this menu item
+- For compound words (e.g., "ビーフ" + "カレー" = "ビーフカレー"), list both positions: [7, 8]
+- For single words (e.g., "ハンバーグ"), list one position: [15]
+- DO NOT include price block positions or description block positions
+- ONLY include positions of blocks that form the actual item name
 
 **OUTPUT FORMAT:**
 
@@ -236,7 +244,12 @@ If extract_prices=true:
     {{
       "name": "Cheeseburger Deluxe",
       "original_price": 12.99,
-      "bounding_box": {{"left": 0.07, "top": 0.32, "width": 0.25, "height": 0.07}}
+      "source_positions": [5, 6]
+    }},
+    {{
+      "name": "Hamburger",
+      "original_price": 10.50,
+      "source_positions": [8]
     }}
   ]
 }}
@@ -246,7 +259,7 @@ If extract_prices=false:
   "items": [
     {{
       "name": "Cheeseburger Deluxe",
-      "bounding_box": {{"left": 0.07, "top": 0.32, "width": 0.25, "height": 0.07}}
+      "source_positions": [5, 6]
     }}
   ]
 }}
@@ -255,25 +268,41 @@ If extract_prices=false:
 
 Example 1 - Price extraction:
 OCR Input: ["Burger", "-", "$10"]
-CORRECT: {{"name": "Burger", "original_price": 10.00}}
+CORRECT: {{"name": "Burger", "original_price": 10.00, "source_positions": [1]}}
 WRONG: {{"name": "Burger - $10", "original_price": 10.00}}
 
-Example 2 - Filter out descriptions:
+Example 2 - Compound word with merged bounding box:
+OCR Input: 
+  [7] "ビーフ" (left: 0.177, top: 0.324)
+  [8] "カレー" (left: 0.310, top: 0.324)
+  [9] "900" (left: 0.800, top: 0.324)
+CORRECT: {{"name": "ビーフカレー", "original_price": 900, "source_positions": [7, 8]}}
+WRONG: {{"name": "ビーフカレー", "original_price": 900, "source_positions": [7]}}  // Missing position 8!
+
+Example 3 - Multi-word English item:
+OCR Input:
+  [12] "Grilled" (left: 0.1, top: 0.5)
+  [13] "Chicken" (left: 0.18, top: 0.5)
+  [14] "Sandwich" (left: 0.28, top: 0.5)
+  [15] "$14.99" (left: 0.8, top: 0.5)
+CORRECT: {{"name": "Grilled Chicken Sandwich", "original_price": 14.99, "source_positions": [12, 13, 14]}}
+
+Example 4 - Filter out descriptions:
 OCR Input: ["Caesar Salad", "Fresh romaine lettuce with parmesan and croutons", "$8.50"]
-CORRECT: {{"name": "Caesar Salad", "original_price": 8.50}}
+CORRECT: {{"name": "Caesar Salad", "original_price": 8.50, "source_positions": [1]}}
 WRONG: {{"name": "Caesar Salad Fresh romaine lettuce with parmesan and croutons", "original_price": 8.50}}
 
-Example 3 - Filter out "served with" text:
+Example 5 - Filter out "served with" text:
 OCR Input: ["Grilled Chicken", "Served with rice and vegetables", "$15.99"]
-CORRECT: {{"name": "Grilled Chicken", "original_price": 15.99}}
+CORRECT: {{"name": "Grilled Chicken", "original_price": 15.99, "source_positions": [1]}}
 WRONG: {{"name": "Grilled Chicken Served with rice and vegetables", "original_price": 15.99}}
 
-Example 4 - Filter out "comes with" text:
+Example 6 - Filter out "comes with" text:
 OCR Input: ["Steak Dinner", "Comes with your choice of two sides", "$24.99"]
-CORRECT: {{"name": "Steak Dinner", "original_price": 24.99}}
+CORRECT: {{"name": "Steak Dinner", "original_price": 24.99, "source_positions": [1]}}
 WRONG: {{"name": "Steak Dinner Comes with your choice of two sides", "original_price": 24.99}}
 
-Example 5 - Multiple items with descriptions:
+Example 7 - Multiple items with descriptions:
 OCR Input: [
   "Margherita Pizza", 
   "Fresh mozzarella, basil, and tomato sauce",
@@ -283,8 +312,8 @@ OCR Input: [
   "13.99"
 ]
 CORRECT: [
-  {{"name": "Margherita Pizza", "original_price": 12.99}},
-  {{"name": "Pepperoni Pizza", "original_price": 13.99}}
+  {{"name": "Margherita Pizza", "original_price": 12.99, "source_positions": [1]}},
+  {{"name": "Pepperoni Pizza", "original_price": 13.99, "source_positions": [4]}}
 ]
 WRONG: [
   {{"name": "Margherita Pizza Fresh mozzarella, basil, and tomato sauce", "original_price": 12.99}}
@@ -300,6 +329,8 @@ WRONG: [
 - The 'name' field should be SHORT and concise - typically 1-4 words (e.g., "Burger", "Caesar Salad", "Grilled Chicken Sandwich")
 - If a text block contains "served with", "comes with", "includes", or similar phrases, it's a DESCRIPTION - exclude it entirely
 - Put all price information in the 'original_price' field as a number (e.g., 12.99, not "12.99" or "$12.99")
+- **ALWAYS include 'source_positions' array listing ALL position numbers that form the item name**
+- **For compound/multi-word items, list ALL positions in 'source_positions' so bounding boxes can be merged correctly**
 
 Always prioritize accuracy over speed."""
 

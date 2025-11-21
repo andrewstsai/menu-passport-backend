@@ -33,7 +33,7 @@ class MenuAgent:
         Initialize the menu orchestration agent.
         """
         self.model = ChatOpenAI(
-            model="gpt-5-mini",
+            model="gpt-5.1",
             api_key=settings.openai_api_key,
             temperature=0.1,
             max_tokens=16384
