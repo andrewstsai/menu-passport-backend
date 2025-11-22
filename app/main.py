@@ -1,6 +1,5 @@
 """
-Main FastAPI Application with Complete AI Agent
-Orchestrates all services for complete menu extraction
+Main FastAPI Application
 """
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Depends
@@ -63,14 +62,14 @@ currency_service = CurrencyConversionService()
 filtration_service = FiltrationService()
 cache_service = CacheService()
 
-@app.get("/", tags=["Info"])
+@app.api_route("/", methods=["GET", "HEAD"], tags=["Info"])
 async def root():
     """API information"""
     return {
         "service": "Menu Passport API",
         "services": {
             "ocr": "Google Cloud Vision",
-            "agent": "GPT 5 Mini",
+            "agent": "GPT 5.1",
             "translation": "DeepL",
             "currency": "ExchangeRate-API",
             "image_search": "Google Custom Search"
